@@ -298,9 +298,6 @@ class Perceparator_Masking(nn.Module):
     def __init__(
         self,
         in_channels,
-        kernel_size,
-        stride,
-        N_encoder_out,
         out_channels,
         num_layers=1,
         norm="ln",
@@ -313,30 +310,36 @@ class Perceparator_Masking(nn.Module):
         self.K = K
         self.num_spks = num_spks
         self.num_layers = num_layers
-        self.encoder = Encoder(kernel_size, N_encoder_out, in_channels)
-        self.norm = select_norm(norm, N_encoder_out, 3)
-        self.conv1d = nn.Conv1d(N_encoder_out, out_channels, 1, bias=False)
+        self.norm = select_norm(norm, in_channels, 3)
+        self.conv1d = nn.Conv1d(in_channels, out_channels, 1, bias=False)
         self.use_global_pos_enc = use_global_pos_enc
 
         if self.use_global_pos_enc:
             self.pos_enc = PositionalEncoding(max_length)
 
         
-        self.latent = nn.parameter.Parameter(
-            torch.nn.init.trunc_normal_(
-                torch.zeros((128,1,256)), mean=0, std=0.02, a=-2, b=2
-            )
+        # self.latent = nn.parameter.Parameter(
+        #     torch.nn.init.trunc_normal_(
+        #         torch.zeros((128,1,256)), mean=0, std=0.02, a=-2, b=2
+        #     )
+        # )
+
+        self.latent = nn.Sequential(
+          nn.Linear(250, 128),
+          nn.ReLU(inplace = True),
+          nn.Linear(128, 128),
+          nn.ReLU(inplace = True),
         )
 
-        self.cross_attn_layer = MultiheadAttention(embed_dim=256, num_heads=8, dropout=0)
-        self.latent_trnfr_layer = MultiheadAttention(embed_dim=256, num_heads=8, dropout=0) 
+        self.cross_attn_layer = MultiheadAttention(embed_dim=256, num_heads=8, dropout=0, batch_first = True)
+        self.latent_trnfr_layer = MultiheadAttention(embed_dim=256, num_heads=8, dropout=0,batch_first = True) 
         self.LinearLatent1 = nn.Linear(256, 512)
         self.LinearLatent2 = nn.Linear(512, 256)
 
         self.conv2d = nn.Conv2d(
             out_channels, out_channels * num_spks, kernel_size=1
         )
-        self.end_conv1x1 = nn.Conv1d(out_channels, N_encoder_out, 1, bias=False)
+        self.end_conv1x1 = nn.Conv1d(out_channels, in_channels, 1, bias=False)
         self.prelu = nn.PReLU()
         self.activation = nn.ReLU()
         # gated output layer
@@ -347,7 +350,6 @@ class Perceparator_Masking(nn.Module):
             nn.Conv1d(out_channels, out_channels, 1), nn.Sigmoid()
         )
 
-        self.decoder = Decoder(in_channels= N_encoder_out, out_channels=1, kernel_size=kernel_size, stride=stride, bias=False)
 
     def forward(self, x):
         """Returns the output tensor.
@@ -369,9 +371,6 @@ class Perceparator_Masking(nn.Module):
 
         # before each line we indicate the shape after executing the line
 
-        #[B, N, L]
-        x = self.encoder(x)
-
         # [B, N, L]
         x = self.norm(x)
 
@@ -386,17 +385,29 @@ class Perceparator_Masking(nn.Module):
         x, gap = self._Segmentation(x, self.K)
         B, N, K, S = x.shape
         x = x.permute(0, 3, 2, 1).reshape(B * S, K, N)
-        x=x.permute(1,0,2)
-        
+        x = x.permute(2, 0, 1)
         #make latent array here
-        latent = self.latent.expand(-1,S,-1) # [B, N, 256]
+        #latent = self.latent.expand(-1,S,-1)
+        latent = self.latent(x).permute(1, 2, 0)
+        x = x.permute(1, 2, 0)
+
+        # print(x.shape)
+        # print(latent.shape)
+        # exit()
 
         for i in range(self.num_layers):
+          
           latent,_ = self.cross_attn_layer(x,latent,latent) # latent = pass x and latent
           #optput latent size
+          # print(x.shape)
+          # print(latent.shape)
+          # exit()
+
           latent,_ = self.latent_trnfr_layer(latent,latent,latent) # latent = pass latent to next layer
           #pass latent to next layer
 
+        print(latent.shape)
+        exit()
 
         out = self.LinearLatent1(latent)
         out = self.LinearLatent2(out)
@@ -422,9 +433,7 @@ class Perceparator_Masking(nn.Module):
 
         # [spks, B, N, L]
         x = x.transpose(0, 1)
-
-        x = self.decoder(x)    
-
+  
         return x
 
     def _padding(self, input, K):
