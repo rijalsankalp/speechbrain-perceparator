@@ -423,7 +423,7 @@ class Perceparator_Masking(nn.Module):
         # [spks, B, N, L]
         x = x.transpose(0, 1)
 
-        x = decoder(x)    
+        x = self.decoder(x)    
 
         return x
 
