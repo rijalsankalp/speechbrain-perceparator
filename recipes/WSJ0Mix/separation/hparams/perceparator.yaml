@@ -92,24 +92,27 @@ dataloader_opts:
   num_workers: 3
 
 # Specifying the network
-Encoder: !new:speechbrain.lobes.models.masking_path.Encoder
-  kernel_size: !ref <kernel_size>
-  out_channels: !ref <N_encoder_out>
+# Encoder: !new:speechbrain.lobes.models.masking_path.Encoder
+#   kernel_size: !ref <kernel_size>
+#   out_channels: !ref <N_encoder_out>
 
 MaskNet: !new:speechbrain.lobes.models.masking_path.Perceparator_Masking
   num_spks: !ref <num_spks>
   in_channels: !ref <N_encoder_out>
+  kernel_size: !ref <kernel_size>
+  N_encoder_out: !ref <N_encoder_out>
   out_channels: !ref <out_channels>
   num_layers: 16
   K: 250
   norm: ln
-
-Decoder: !new:speechbrain.lobes.models.masking_path.Decoder
-  in_channels: !ref <N_encoder_out>
-  out_channels: 1
-  kernel_size: !ref <kernel_size>
   stride: !ref <kernel_stride>
-  bias: False
+
+# Decoder: !new:speechbrain.lobes.models.masking_path.Decoder
+#   in_channels: !ref <N_encoder_out>
+#   out_channels: 1
+#   kernel_size: !ref <kernel_size>
+#   stride: !ref <kernel_stride>
+#   bias: False
 
 optimizer: !name:torch.optim.Adam
   lr: !ref <lr>

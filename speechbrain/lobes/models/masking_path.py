@@ -9,14 +9,8 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import copy
-from speechbrain.nnet.linear import Linear
-from speechbrain.lobes.models.transformer.Transformer import TransformerEncoder
 from speechbrain.lobes.models.transformer.Transformer import PositionalEncoding
-from speechbrain.lobes.models.transformer.Conformer import ConformerEncoder
-import speechbrain.nnet.RNN as SBRNN
 from torch.nn.modules.activation import MultiheadAttention
-from speechbrain.nnet.activations import Swish
 
 
 EPS = 1e-8
@@ -267,70 +261,6 @@ class Decoder(nn.ConvTranspose1d):
         return x
 
 
-class IdentityBlock:
-    """This block is used when we want to have identity transformation within the Dual_path block.
-
-    Example
-    -------
-    >>> x = torch.randn(10, 100)
-    >>> IB = IdentityBlock()
-    >>> xhat = IB(x)
-    """
-
-    def _init__(self, **kwargs):
-        pass
-
-    def __call__(self, x):
-        return x
-
-
-class PyTorchPositionalEncoding(nn.Module):
-    """Positional encoder for the pytorch transformer.
-
-    Arguments
-    ---------
-    d_model : int
-        Representation dimensionality.
-    dropout : float
-        Dropout drop prob.
-    max_len : int
-        Max sequence length.
-
-    Example
-    -------
-    >>> x = torch.randn(10, 100, 64)
-    >>> enc = PyTorchPositionalEncoding(64)
-    >>> x = enc(x)
-    """
-
-    def __init__(self, d_model, dropout=0.1, max_len=5000):
-        super(PyTorchPositionalEncoding, self).__init__()
-        self.dropout = nn.Dropout(p=dropout)
-
-        pe = torch.zeros(max_len, d_model)
-        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
-        div_term = torch.exp(
-            torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model)
-        )
-        pe[:, 0::2] = torch.sin(position * div_term)
-        pe[:, 1::2] = torch.cos(position * div_term)
-        pe = pe.unsqueeze(0).transpose(0, 1)
-        self.register_buffer("pe", pe)
-
-    def forward(self, x):
-        """Returns the encoded output.
-
-        Arguments
-        ---------
-        x : torch.Tensor
-            Tensor shape [B, L, N],
-            where, B = Batchsize,
-                   N = number of filters
-                   L = time points
-        """
-        x = x + self.pe[: x.size(0), :]
-        return self.dropout(x)
-
 
 class Perceparator_Masking(nn.Module):
     """The dual path model which is the basis for dualpathrnn, sepformer, dptnet.
@@ -340,23 +270,15 @@ class Perceparator_Masking(nn.Module):
     in_channels : int
         Number of channels at the output of the encoder.
     out_channels : int
-        Number of channels that would be inputted to the intra and inter blocks.
-    intra_model : torch.nn.module
-        Model to process within the chunks.
-    inter_model : torch.nn.module
-        model to process across the chunks,
+        Number of channels that would be inputted to the cross attentionlayer.
     num_layers : int
-        Number of layers of Dual Computation Block.
+        Number of layers of [cross-attetntion + latent-transformer].
     norm : str
         Normalization type.
     K : int
         Chunk length.
     num_spks : int
         Number of sources (speakers).
-    skip_around_intra : bool
-        Skip connection around intra.
-    linear_layer_after_inter_intra : bool
-        Linear layer after inter and intra.
     use_global_pos_enc : bool
         Global positional encodings.
     max_length : int
@@ -376,6 +298,9 @@ class Perceparator_Masking(nn.Module):
     def __init__(
         self,
         in_channels,
+        kernel_size,
+        stride,
+        N_encoder_out,
         out_channels,
         num_layers=1,
         norm="ln",
@@ -388,8 +313,9 @@ class Perceparator_Masking(nn.Module):
         self.K = K
         self.num_spks = num_spks
         self.num_layers = num_layers
-        self.norm = select_norm(norm, in_channels, 3)
-        self.conv1d = nn.Conv1d(in_channels, out_channels, 1, bias=False)
+        self.encoder = Encoder(kernel_size, N_encoder_out, in_channels)
+        self.norm = select_norm(norm, N_encoder_out, 3)
+        self.conv1d = nn.Conv1d(N_encoder_out, out_channels, 1, bias=False)
         self.use_global_pos_enc = use_global_pos_enc
 
         if self.use_global_pos_enc:
@@ -410,7 +336,7 @@ class Perceparator_Masking(nn.Module):
         self.conv2d = nn.Conv2d(
             out_channels, out_channels * num_spks, kernel_size=1
         )
-        self.end_conv1x1 = nn.Conv1d(out_channels, in_channels, 1, bias=False)
+        self.end_conv1x1 = nn.Conv1d(out_channels, N_encoder_out, 1, bias=False)
         self.prelu = nn.PReLU()
         self.activation = nn.ReLU()
         # gated output layer
@@ -420,6 +346,8 @@ class Perceparator_Masking(nn.Module):
         self.output_gate = nn.Sequential(
             nn.Conv1d(out_channels, out_channels, 1), nn.Sigmoid()
         )
+
+        self.decoder = Decoder(in_channels= N_encoder_out, out_channels=1, kernel_size=kernel_size, stride=stride, bias=False)
 
     def forward(self, x):
         """Returns the output tensor.
@@ -440,6 +368,9 @@ class Perceparator_Masking(nn.Module):
         """
 
         # before each line we indicate the shape after executing the line
+
+        #[B, N, L]
+        x = self.encoder(x)
 
         # [B, N, L]
         x = self.norm(x)
@@ -491,6 +422,8 @@ class Perceparator_Masking(nn.Module):
 
         # [spks, B, N, L]
         x = x.transpose(0, 1)
+
+        x = decoder(x)    
 
         return x
 
