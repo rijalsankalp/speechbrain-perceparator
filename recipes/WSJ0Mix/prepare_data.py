@@ -55,7 +55,7 @@ def prepare_wsjmix(
 def create_custom_dataset(
     datapath,
     savepath,
-    dataset_name="custom",
+    dataset_name="data",
     set_types=["train", "valid", "test"],
     folder_names={
         "source1": "source1",
