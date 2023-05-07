@@ -397,11 +397,8 @@ class Perceparator_Masking(nn.Module):
 
         for i in range(self.num_layers):
           
-          latent,_ = self.cross_attn_layer(x,latent,latent) # latent = pass x and latent
+          latent,_ = self.cross_attn_layer(latent, x, x) # latent = pass x and latent
           #optput latent size
-          # print(x.shape)
-          # print(latent.shape)
-          # exit()
 
           latent,_ = self.latent_trnfr_layer(latent,latent,latent) # latent = pass latent to next layer
           #pass latent to next layer
