@@ -403,8 +403,6 @@ class Perceparator_Masking(nn.Module):
           #pass latent to next layer
 
         x = self.latent_conv(latent).unsqueeze(0).permute(0,3,2,1)
-        print(x.shape)
-        exit()
         x = self.prelu(out)
         
         # [B, N*spks, K, S]
