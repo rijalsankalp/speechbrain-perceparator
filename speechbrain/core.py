@@ -7,7 +7,7 @@ Authors
  * Aku Rouhe 2021
  * Andreas Nautsch 2022
 """
-
+from torchsummary import summary
 import os
 import sys
 import yaml
@@ -582,6 +582,8 @@ class Brain:
                 self.checkpointer.add_recoverable("scaler", self.scaler)
 
         # List parameter count for the user
+        a = [p for p in self.modules.parameters()]
+        print(a.__len__())
         total_params = sum(
             p.numel() for p in self.modules.parameters() if p.requires_grad
         )

@@ -330,11 +330,10 @@ class Perceparator_Masking(nn.Module):
           nn.Linear(128, 128),
           nn.ReLU(inplace = True),
         )
-
-        self.cross_attn_layer = MultiheadAttention(embed_dim=256, num_heads=8, dropout=0, batch_first = True)
-        self.latent_trnfr_layer = MultiheadAttention(embed_dim=256, num_heads=8, dropout=0,batch_first = True) 
-        self.LinearLatent1 = nn.Linear(256, 512)
-        self.LinearLatent2 = nn.Linear(512, 256)
+        self.perceiver = nn.Sequential(*[
+          MultiheadAttention(embed_dim=256, num_heads=8, dropout=0, batch_first = True) for _ in range(self.num_layers)])
+        
+        self.latent_conv = nn.Conv1d(in_channels = 128, out_channels=250, kernel_size = 1, stride =1)
 
         self.conv2d = nn.Conv2d(
             out_channels, out_channels * num_spks, kernel_size=1
@@ -395,20 +394,19 @@ class Perceparator_Masking(nn.Module):
         # print(latent.shape)
         # exit()
 
-        for i in range(self.num_layers):
+        for i in range(0, self.num_layers-2, 2):
           
-          latent,_ = self.cross_attn_layer(latent, x, x) # latent = pass x and latent
+          latent,_ = self.perceiver[i](latent, x, x) # latent = pass x and latent
           #optput latent size
 
-          latent,_ = self.latent_trnfr_layer(latent,latent,latent) # latent = pass latent to next layer
+          latent,_ = self.perceiver[i+1](latent,latent,latent) # latent = pass latent to next layer
           #pass latent to next layer
 
-        print(latent.shape)
+        x = self.latent_conv(latent).unsqueeze(0).permute(0,3,2,1)
+        print(x.shape)
         exit()
-
-        out = self.LinearLatent1(latent)
-        out = self.LinearLatent2(out)
-        x = self.prelu(out).permute(2,0,1).reshape(1,256,250,82)
+        x = self.prelu(out)
+        
         # [B, N*spks, K, S]
         x = self.conv2d(x)
         B, _, K, S = x.shape

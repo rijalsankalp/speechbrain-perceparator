@@ -100,7 +100,7 @@ MaskNet: !new:speechbrain.lobes.models.masking_path.Perceparator_Masking
   num_spks: !ref <num_spks>
   in_channels: !ref <N_encoder_out>
   out_channels: !ref <out_channels>
-  num_layers: 16
+  num_layers: 34
   K: 250
   norm: ln
 
