@@ -24,7 +24,7 @@ data_folder: !PLACEHOLDER
 base_folder_dm: /yourpath/libri2Mix-processed/si_tr_s/
 
 experiment_name: perceparator-libri2mix
-output_folder: !ref /content/drive/MyDrive/results/<experiment_name>/<seed>
+output_folder: !ref /content/drive/MyDrive/results_AdamP/<experiment_name>/<seed>
 train_log: !ref <output_folder>/train_log.txt
 save_folder: !ref <output_folder>/save
 train_data: !ref <save_folder>/data_train.csv
@@ -43,7 +43,7 @@ sample_rate: 16000
 # Training parameters
 N_epochs: 200
 batch_size: 1
-lr: 0.00015
+lr: 0.01 #0.00015
 clip_grad_norm: 5
 loss_upper_lim: 999999 # this is the upper limit for an acceptable loss
 # if True, the training sequences are cut to a specified length
@@ -111,9 +111,13 @@ Decoder: !new:speechbrain.lobes.models.masking_path.Decoder
   stride: !ref <kernel_stride>
   bias: False
 
-optimizer: !name:torch.optim.Adam
+#optimizer: !name:torch.optim.Adam
+#  lr: !ref <lr>
+#  weight_decay: 0
+
+optimizer: !name:adamp.AdamP
   lr: !ref <lr>
-  weight_decay: 0
+  weight_decay: 1e-2
 
 loss: !name:speechbrain.nnet.losses.get_si_snr_with_pitwrapper
 
