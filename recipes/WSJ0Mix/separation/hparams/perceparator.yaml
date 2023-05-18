@@ -24,7 +24,7 @@ data_folder: !PLACEHOLDER
 base_folder_dm: /yourpath/libri2Mix-processed/si_tr_s/
 
 experiment_name: perceparator-libri2mix
-output_folder: !ref /content/drive/MyDrive/results/<experiment_name>/<seed>
+output_folder: !ref /kaggle/working/result/<experiment_name>/<seed>
 train_log: !ref <output_folder>/train_log.txt
 save_folder: !ref <output_folder>/save
 train_data: !ref <save_folder>/data_train.csv
